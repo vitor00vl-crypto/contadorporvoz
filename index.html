@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Contador por Voz</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;background:#fff;color:#111}
+  body{display:flex;align-items:center;justify-content:center}
+  main{width:100%;height:100%;padding:30px 22px calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #count{font-size:clamp(110px,35vw,260px);font-weight:700;line-height:1;margin:0 0 55px;letter-spacing:-5px}
+  .buttons{display:flex;gap:12px;width:min(420px,100%)}
+  button{flex:1;border:0;border-radius:16px;padding:18px 14px;font-size:20px;font-weight:600;background:#111;color:#fff}
+  button.secondary{background:#e9e9ee;color:#111}
+  #status{margin-top:22px;font-size:15px;color:#666;text-align:center;min-height:22px}
+  .listening #count{animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{opacity:.65}}
+</style>
+</head>
+<body>
+<main id="app">
+  <div id="count">0</div>
+  <div class="buttons">
+    <button id="start">Iniciar</button>
+    <button id="reset" class="secondary">Resetar</button>
+  </div>
+  <div id="status">Toque em Iniciar e fale: 1, 2, 3, 4...</div>
+</main>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const countEl = document.getElementById('count');
+const startBtn = document.getElementById('start');
+const resetBtn = document.getElementById('reset');
+const statusEl = document.getElementById('status');
+const app = document.getElementById('app');
+
+let count = 0;
+let listening = false;
+let recognition = null;
+let restarting = false;
+
+const wordNumbers = {
+  "zero":0,"um":1,"uma":1,"dois":2,"duas":2,"três":3,"tres":3,"quatro":4,"cinco":5,
+  "seis":6,"sete":7,"oito":8,"nove":9,"dez":10,"onze":11,"doze":12,"treze":13,
+  "catorze":14,"quatorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,
+  "dezenove":19,"vinte":20,"trinta":30,"quarenta":40,"cinquenta":50,"sessenta":60,
+  "setenta":70,"oitenta":80,"noventa":90,"cem":100
+};
+
+function setCount(n){
+  count = Number(n);
+  if(Number.isFinite(count)) countEl.textContent = count;
+}
+
+function parseNumbers(text){
+  const out = [];
+  const matches = text.match(/\d+/g);
+  if(matches) matches.forEach(x => out.push(Number(x)));
+
+  const normalized = text.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[.,;!?]/g," ");
+  normalized.split(/\s+/).forEach(w => {
+    if(Object.prototype.hasOwnProperty.call(wordNumbers,w)) out.push(wordNumbers[w]);
+  });
+  return out;
+}
+
+function setupRecognition(){
+  if(!SpeechRecognition){
+    statusEl.textContent = "O reconhecimento de voz não está disponível neste navegador.";
+    startBtn.disabled = true;
+    return false;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "pt-BR";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 3;
+
+  recognition.onstart = () => {
+    listening = true;
+    restarting = false;
+    startBtn.textContent = "Pausar";
+    statusEl.textContent = "Ouvindo... fale os números.";
+    app.classList.add("listening");
+  };
+
+  recognition.onresult = (event) => {
+    for(let i = event.resultIndex; i < event.results.length; i++){
+      const text = event.results[i][0].transcript;
+      const nums = parseNumbers(text);
+      if(nums.length){
+        // Mostra o último número reconhecido.
+        setCount(nums[nums.length - 1]);
+      }
+    }
+  };
+
+  recognition.onerror = (event) => {
+    if(event.error === "not-allowed" || event.error === "service-not-allowed"){
+      listening = false;
+      startBtn.textContent = "Iniciar";
+      app.classList.remove("listening");
+      statusEl.textContent = "Permissão do microfone negada. Autorize o microfone no Safari.";
+    }
+  };
+
+  recognition.onend = () => {
+    if(listening && !restarting){
+      restarting = true;
+      setTimeout(() => {
+        if(listening){
+          try { recognition.start(); } catch(e) {}
+        }
+      }, 150);
+    } else {
+      startBtn.textContent = "Iniciar";
+      app.classList.remove("listening");
+    }
+  };
+  return true;
+}
+
+startBtn.onclick = () => {
+  if(!recognition && !setupRecognition()) return;
+  if(listening){
+    listening = false;
+    try { recognition.stop(); } catch(e) {}
+    startBtn.textContent = "Iniciar";
+    statusEl.textContent = "Pausado.";
+    app.classList.remove("listening");
+  }else{
+    listening = true;
+    try { recognition.start(); }
+    catch(e){ statusEl.textContent = "Toque novamente em Iniciar para ativar o microfone."; }
+  }
+};
+
+resetBtn.onclick = () => {
+  setCount(0);
+  statusEl.textContent = listening ? "Ouvindo... fale os números." : "Zerado. Toque em Iniciar.";
+};
+</script>
+</body>
+</html>
