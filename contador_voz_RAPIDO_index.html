@@ -1,0 +1,32 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Contador por Voz - Rápido</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;background:#fff;color:#111}
+body{display:flex;align-items:center;justify-content:center}main{width:100%;height:100%;padding:30px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#numero{font-size:clamp(110px,35vw,260px);font-weight:700;line-height:1;margin:0 0 55px;letter-spacing:-5px}.botoes{display:flex;gap:12px;width:min(420px,100%)}
+button{flex:1;border:0;border-radius:16px;padding:18px 14px;font-size:20px;font-weight:600;background:#111;color:#fff}button.secondary{background:#e9e9ee;color:#111}
+#status{margin-top:22px;font-size:15px;color:#666;text-align:center;min-height:22px}
+</style></head><body><main>
+<div id="numero">0</div><div class="botoes"><button id="iniciar">Iniciar</button><button id="reset" class="secondary">Resetar</button></div>
+<div id="status">Toque em Iniciar e conte normalmente.</div></main>
+<script>
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const el=document.getElementById("numero"),start=document.getElementById("iniciar"),reset=document.getElementById("reset"),status=document.getElementById("status");
+let rec=null,listening=false,last=null,timer=null;
+const words={"zero":0,"um":1,"uma":1,"dois":2,"duas":2,"três":3,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,"onze":11,"doze":12,"treze":13,"catorze":14,"quatorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20,"trinta":30,"quarenta":40,"cinquenta":50,"sessenta":60,"setenta":70,"oitenta":80,"noventa":90,"cem":100};
+function norm(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[.,!?;:]/g," ")}
+function lastNumber(s){let found=null;for(const t of norm(s).split(/\s+/).filter(Boolean)){if(/^\d+$/.test(t)){let n=Number(t);if(n<=100)found=n}else if(t in words)found=words[t]}return found}
+function show(n){if(n!==null&&Number.isFinite(n)&&n!==last){last=n;el.textContent=n}}
+function make(){
+ if(!SR){status.textContent="Reconhecimento de voz não disponível.";return null}
+ const r=new SR();r.lang="pt-BR";r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+ r.onstart=()=>status.textContent="Ouvindo...";
+ r.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){const n=lastNumber(e.results[i][0].transcript);if(n!==null)show(n)}};
+ r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){listening=false;start.textContent="Iniciar";status.textContent="Permita o microfone no Safari."}};
+ r.onend=()=>{if(listening){clearTimeout(timer);timer=setTimeout(()=>{try{r.start()}catch(e){}},40)}else{start.textContent="Iniciar";status.textContent="Pausado."}};
+ return r
+}
+start.onclick=()=>{if(!rec)rec=make();if(!rec)return;if(listening){listening=false;clearTimeout(timer);try{rec.stop()}catch(e){}start.textContent="Iniciar"}else{listening=true;last=null;start.textContent="Pausar";try{rec.start()}catch(e){}}};
+reset.onclick=()=>{last=null;el.textContent="0";status.textContent=listening?"Ouvindo...":"Zerado."};
+</script></body></html>
