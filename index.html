@@ -1,21 +1,16 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Contador por Voz</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;background:#fff;color:#111}
-body{display:flex;align-items:center;justify-content:center}
-main{width:100%;height:100%;padding:30px 22px calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;justify-content:center}
+body{display:flex;align-items:center;justify-content:center}main{width:100%;height:100%;padding:30px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center}
 #count{font-size:clamp(110px,35vw,260px);font-weight:700;line-height:1;margin:0 0 55px;letter-spacing:-5px}
 .buttons{display:flex;gap:12px;width:min(420px,100%)}button{flex:1;border:0;border-radius:16px;padding:18px 14px;font-size:20px;font-weight:600;background:#111;color:#fff}button.secondary{background:#e9e9ee;color:#111}
 #status{margin-top:22px;font-size:15px;color:#666;text-align:center;min-height:22px}
-</style>
-</head>
-<body>
-<main>
+</style></head>
+<body><main>
 <div id="count">0</div>
 <div class="buttons"><button id="start">Iniciar</button><button id="reset" class="secondary">Resetar</button></div>
 <div id="status">Toque em Iniciar e fale: 1, 2, 3, 4...</div>
@@ -24,45 +19,30 @@ main{width:100%;height:100%;padding:30px 22px calc(30px + env(safe-area-inset-bo
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const countEl=document.getElementById('count'),start=document.getElementById('start'),reset=document.getElementById('reset'),status=document.getElementById('status');
 let rec=null,listening=false;
-
-const words={"zero":0,"um":1,"uma":1,"dois":2,"duas":2,"três":3,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10};
-
+const words={"zero":0,"um":1,"uma":1,"dois":2,"duas":2,"três":3,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,"onze":11,"doze":12,"treze":13,"catorze":14,"quatorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20,"trinta":30,"quarenta":40,"cinquenta":50,"sessenta":60,"setenta":70,"oitenta":80,"noventa":90,"cem":100};
 function numbersFromText(t){
-  t=t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g," ");
-  const out=[];
-  // If speech recognition returns a run such as "123", treat it as the
-  // sequence of spoken digits and use the last digit.
-  const digitRuns=t.match(/\d+/g);
-  if(digitRuns) for(const run of digitRuns){
-    if(run.length===1) out.push(+run);
-    else for(const ch of run) out.push(+ch);
-  }
-  for(const w of t.replace(/[^a-z0-9]+/g," ").split(/\s+/)){
-    if(w in words) out.push(words[w]);
-  }
-  return out;
+ t=t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g," ");
+ const out=[];
+ const tokens=t.replace(/[^a-z0-9]+/g," ").split(/\s+/).filter(Boolean);
+ for(const token of tokens){
+  if(/^\d+$/.test(token)){
+   const n=Number(token);
+   if(n>=10&&n<=100) out.push(n);
+   else if(token.length===1) out.push(n);
+   else for(const ch of token) out.push(Number(ch));
+  } else if(token in words) out.push(words[token]);
+ }
+ return out;
 }
-
 function setup(){
  if(!SR){status.textContent="Reconhecimento de voz não disponível.";return false}
  rec=new SR();rec.lang="pt-BR";rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=5;
  rec.onstart=()=>{start.textContent="Pausar";status.textContent="Ouvindo... fale os números.";listening=true};
- rec.onresult=e=>{
-   for(let i=e.resultIndex;i<e.results.length;i++){
-     const nums=numbersFromText(e.results[i][0].transcript);
-     if(nums.length) countEl.textContent=nums[nums.length-1];
-   }
- };
+ rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){const nums=numbersFromText(e.results[i][0].transcript);if(nums.length)countEl.textContent=nums[nums.length-1]}};
  rec.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){listening=false;start.textContent="Iniciar";status.textContent="Permita o microfone no Safari."}};
  rec.onend=()=>{if(listening){try{rec.start()}catch(e){}}else start.textContent="Iniciar"};
  return true;
 }
-start.onclick=()=>{
- if(!rec&&!setup())return;
- if(listening){listening=false;try{rec.stop()}catch(e){}start.textContent="Iniciar";status.textContent="Pausado."}
- else{listening=true;try{rec.start()}catch(e){}}
-};
+start.onclick=()=>{if(!rec&&!setup())return;if(listening){listening=false;try{rec.stop()}catch(e){}start.textContent="Iniciar";status.textContent="Pausado."}else{listening=true;try{rec.start()}catch(e){}}};
 reset.onclick=()=>{countEl.textContent="0";status.textContent=listening?"Ouvindo... fale os números.":"Zerado. Toque em Iniciar."};
-</script>
-</body>
-</html>
+</script></body></html>
