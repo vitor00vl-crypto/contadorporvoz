@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contador por Voz - Corrigido</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #fff;
+    color: #111;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px;
+  }
+  #numero {
+    font-size: clamp(120px, 35vw, 280px);
+    line-height: 1;
+    font-weight: 700;
+    text-align: center;
+  }
+  #status {
+    min-height: 24px;
+    font-size: 18px;
+    text-align: center;
+    color: #555;
+  }
+  .botoes {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    border: 0;
+    border-radius: 14px;
+    padding: 14px 22px;
+    font-size: 18px;
+    font-weight: 600;
+    background: #111;
+    color: white;
+    touch-action: manipulation;
+  }
+  button:active { transform: scale(.98); }
+  #reset { background: #ddd; color: #111; }
+</style>
+</head>
+<body>
+  <div id="numero">0</div>
+  <div id="status">Toque em Iniciar e fale os números.</div>
+  <div class="botoes">
+    <button id="iniciar">Iniciar</button>
+    <button id="pausar">Pausar</button>
+    <button id="reset">Resetar</button>
+  </div>
+
+<script>
+(() => {
+  const numeroEl = document.getElementById("numero");
+  const statusEl = document.getElementById("status");
+  const iniciarBtn = document.getElementById("iniciar");
+  const pausarBtn = document.getElementById("pausar");
+  const resetBtn = document.getElementById("reset");
+
+  let numero = 0;
+  let rodando = false;
+  let recognition = null;
+  let reiniciarTimer = null;
+
+  const palavras = {
+    "zero": 0, "um": 1, "uma": 1, "dois": 2, "duas": 2, "três": 3,
+    "tres": 3, "quatro": 4, "cinco": 5, "seis": 6, "sete": 7,
+    "oito": 8, "nove": 9, "dez": 10, "onze": 11, "doze": 12,
+    "treze": 13, "quatorze": 14, "catorze": 14, "quinze": 15,
+    "dezesseis": 16, "dezasseis": 16, "dezessete": 17,
+    "dezoito": 18, "dezenove": 19, "vinte": 20
+  };
+
+  function mostrar() {
+    numeroEl.textContent = String(numero);
+  }
+
+  function interpretar(texto) {
+    const t = texto.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+    if (!t) return null;
+
+    // Se o reconhecimento devolver vários números separados por espaços,
+    // usa o último número reconhecido.
+    const tokens = t.split(/[\s,;]+/).filter(Boolean);
+    let ultimo = null;
+
+    for (const token of tokens) {
+      if (/^\d+$/.test(token)) {
+        ultimo = Number(token);
+      } else if (Object.prototype.hasOwnProperty.call(palavras, token)) {
+        ultimo = palavras[token];
+      }
+    }
+
+    // Ex.: "dez" / "10" devem virar 10, sem separar em 1 e 0.
+    if (ultimo !== null && Number.isFinite(ultimo)) return ultimo;
+
+    return null;
+  }
+
+  function prepararReconhecimento() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      statusEl.textContent = "Seu navegador não oferece reconhecimento de voz.";
+      return null;
+    }
+
+    const r = new SR();
+    r.lang = "pt-BR";
+    r.continuous = false;
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+
+    r.onstart = () => {
+      statusEl.textContent = "Ouvindo... fale um número.";
+    };
+
+    r.onresult = (event) => {
+      const texto = event.results[0][0].transcript;
+      const valor = interpretar(texto);
+
+      if (valor !== null) {
+        numero = valor;
+        mostrar();
+        statusEl.textContent = `Reconheci: ${valor}`;
+      } else {
+        statusEl.textContent = `Não entendi "${texto}".`;
+      }
+    };
+
+    r.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        statusEl.textContent = "Permissão do microfone bloqueada no Safari.";
+        rodando = false;
+        return;
+      }
+      if (rodando) statusEl.textContent = "Tentando ouvir novamente...";
+    };
+
+    r.onend = () => {
+      if (rodando) {
+        clearTimeout(reiniciarTimer);
+        reiniciarTimer = setTimeout(() => {
+          try { r.start(); } catch (e) {}
+        }, 150);
+      } else {
+        statusEl.textContent = "Pausado.";
+      }
+    };
+
+    return r;
+  }
+
+  function iniciar() {
+    if (!window.isSecureContext) {
+      statusEl.textContent = "Abra o site pelo endereço HTTPS para usar o microfone.";
+      return;
+    }
+
+    if (!recognition) recognition = prepararReconhecimento();
+    if (!recognition) return;
+
+    rodando = true;
+    try {
+      recognition.start();
+    } catch (e) {
+      statusEl.textContent = "Já estou ouvindo.";
+    }
+  }
+
+  function pausar() {
+    rodando = false;
+    clearTimeout(reiniciarTimer);
+    if (recognition) {
+      try { recognition.stop(); } catch (e) {}
+    }
+    statusEl.textContent = "Pausado.";
+  }
+
+  function resetar() {
+    numero = 0;
+    mostrar();
+    statusEl.textContent = rodando ? "Ouvindo... fale um número." : "Zerado.";
+  }
+
+  iniciarBtn.addEventListener("click", iniciar);
+  pausarBtn.addEventListener("click", pausar);
+  resetBtn.addEventListener("click", resetar);
+})();
+</script>
+</body>
+</html>
