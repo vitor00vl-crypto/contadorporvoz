@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Contador por Voz - Rápido Sequencial</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;background:#fff;color:#111}
+body{display:flex;align-items:center;justify-content:center}
+main{width:100%;height:100%;padding:30px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#numero{font-size:clamp(110px,35vw,260px);font-weight:700;line-height:1;margin:0 0 55px;letter-spacing:-5px}
+.botoes{display:flex;gap:12px;width:min(420px,100%)}
+button{flex:1;border:0;border-radius:16px;padding:18px 14px;font-size:20px;font-weight:600;background:#111;color:#fff}
+button.secondary{background:#e9e9ee;color:#111}
+#status{margin-top:22px;font-size:15px;color:#666;text-align:center;min-height:22px}
+</style>
+</head>
+<body>
+<main>
+<div id="numero">0</div>
+<div class="botoes">
+<button id="iniciar">Iniciar</button>
+<button id="reset" class="secondary">Resetar</button>
+</div>
+<div id="status">Iniciar e falar: 1, 2, 3, 4...</div>
+</main>
+
+<script>
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const numeroEl = document.getElementById("numero");
+const iniciarBtn = document.getElementById("iniciar");
+const resetBtn = document.getElementById("reset");
+const statusEl = document.getElementById("status");
+
+let recognition = null;
+let listening = false;
+let esperado = 1;
+let restartTimer = null;
+
+const palavras = {
+  zero:0, um:1, uma:1, dois:2, duas:2, tres:3, três:3,
+  quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9,
+  dez:10, onze:11, doze:12, treze:13, catorze:14, quatorze:14,
+  quinze:15, dezesseis:16, dezessete:17, dezoito:18, dezenove:19,
+  vinte:20
+};
+
+function normalizar(s){
+  return s.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[.,!?;:]/g," ");
+}
+
+/*
+ IMPORTANTE:
+ Não transformamos "12" em 12 quando estamos esperando 1.
+ Se o iPhone entender "1,2" como "12", o app simplesmente ignora
+ esse resultado. Quando ele separar em "1 2", aceita os dois em sequência.
+*/
+function processar(texto){
+  const t = normalizar(texto);
+  const tokens = t.split(/\s+/).filter(Boolean);
+
+  for(const token of tokens){
+    let n = null;
+
+    if(/^\d+$/.test(token)){
+      // Números de dois ou mais dígitos são aceitos somente se forem
+      // exatamente o próximo número esperado.
+      const valor = Number(token);
+      if(valor === esperado) n = valor;
+      else continue;
+    } else if(Object.prototype.hasOwnProperty.call(palavras, token)){
+      n = palavras[token];
+    }
+
+    if(n === esperado){
+      numeroEl.textContent = String(esperado);
+      esperado++;
+      statusEl.textContent = "Ouvindo...";
+    }
+  }
+}
+
+function criarReconhecimento(){
+  if(!SR){
+    statusEl.textContent = "Reconhecimento de voz não disponível.";
+    return null;
+  }
+
+  const r = new SR();
+  r.lang = "pt-BR";
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+
+  r.onstart = () => {
+    statusEl.textContent = "Ouvindo...";
+  };
+
+  r.onresult = (event) => {
+    for(let i = event.resultIndex; i < event.results.length; i++){
+      processar(event.results[i][0].transcript);
+    }
+  };
+
+  r.onerror = (event) => {
+    if(event.error === "not-allowed" || event.error === "service-not-allowed"){
+      listening = false;
+      iniciarBtn.textContent = "Iniciar";
+      statusEl.textContent = "Permita o microfone no Safari.";
+    }
+  };
+
+  r.onend = () => {
+    if(listening){
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        try { r.start(); } catch(e) {}
+      }, 20);
+    } else {
+      iniciarBtn.textContent = "Iniciar";
+      statusEl.textContent = "Pausado.";
+    }
+  };
+
+  return r;
+}
+
+iniciarBtn.onclick = () => {
+  if(!recognition) recognition = criarReconhecimento();
+  if(!recognition) return;
+
+  if(listening){
+    listening = false;
+    clearTimeout(restartTimer);
+    try { recognition.stop(); } catch(e) {}
+    iniciarBtn.textContent = "Iniciar";
+    statusEl.textContent = "Pausado.";
+  } else {
+    // Sempre começa uma nova contagem no 1.
+    esperado = 1;
+    numeroEl.textContent = "0";
+    listening = true;
+    iniciarBtn.textContent = "Pausar";
+    try { recognition.start(); } catch(e) {}
+  }
+};
+
+resetBtn.onclick = () => {
+  esperado = 1;
+  numeroEl.textContent = "0";
+  statusEl.textContent = listening ? "Ouvindo... fale 1." : "Zerado. Próximo: 1";
+};
+</script>
+</body>
+</html>
